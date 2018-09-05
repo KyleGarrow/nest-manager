@@ -24,41 +24,41 @@
         "setupVersion": 2,
         "versions": {
             "app": {
-                "ver": "5.4.2"
+                "ver": "5.5.0"
             },
             "autoapp": {
-                "ver": "5.4.2"
+                "ver": "5.4.3"
             },
             "storapp": {
                 "ver": "5.4.0"
             },
             "thermostat": {
-                "ver": "5.3.7"
+                "ver": "5.4.0"
             },
             "protect": {
-                "ver": "5.3.7"
+                "ver": "5.4.0"
             },
             "camera": {
-                "ver": "5.3.9"
+                "ver": "5.4.0"
             },
             "presence": {
-                "ver": "5.3.7"
+                "ver": "5.4.0"
             },
             "weather": {
-                "ver": "5.3.7"
+                "ver": "5.4.0"
             }
         },
         "allowInApp": false
     },
     "database": {
         "allowRemoteDiag": true,
-        "disableExceptions": false,
+        "disableExceptions": true,
         "exceptionPath": "exceptionData",
         "newexceptionPath": "newexceptionData",
         "remoteDiagPath": "remoteDiagLogs"
     },
     "appSettings": {
-        "pullFromFB": true
+        "pullFromFB": false
     },
     "aaPrefs": {
         "enAaMsgQueue": true,

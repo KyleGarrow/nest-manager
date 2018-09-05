@@ -34,17 +34,17 @@ definition(
 	appSetting "devOpt"
 }
 
-def appVersion() { "5.4.2" }
-def appVerDate() { "08-20-2018" }
+def appVersion() { "5.5.0" }
+def appVerDate() { "08-23-2018" }
 def minVersions() {
 	return [
-		"automation":["val":542, "desc":"5.4.2"],
-		"thermostat":["val":537, "desc":"5.3.7"],
-		"protect":["val":537, "desc":"5.3.7"],
-		"presence":["val":537, "desc":"5.3.7"],
-		"weather":["val":537, "desc":"5.3.7"],
-		"camera":["val":539, "desc":"5.3.9"],
-		"stream":["val":106, "desc":"1.0.6"]
+		"automation":["val":543, "desc":"5.4.3"],
+		"thermostat":["val":540, "desc":"5.4.0"],
+		"protect":["val":540, "desc":"5.4.0"],
+		"presence":["val":540, "desc":"5.4.0"],
+		"weather":["val":540, "desc":"5.4.0"],
+		"camera":["val":540, "desc":"5.4.0"],
+		"stream":["val":201, "desc":"2.0.1"]
 	]
 }
 
@@ -106,8 +106,10 @@ mappings {
 		path("/cameraTiles")	{action: [GET: "getCamTiles"]}
 		path("/weatherTile")	{action: [GET: "getWeatherTile"]}
 		path("/renderInstallData")	{action: [GET: "renderInstallData"]}
-		path("/receiveEventData") 	{action: [POST: "receiveEventData"]}
-		path("/streamStatus")		{action: [POST: "receiveStreamStatus"]}
+		if(!(settings?.restStreamLocal && settings?.restStreamLocalHub)) {
+			path("/receiveEventData") 	{action: [POST: "receiveEventData"]}
+			path("/streamStatus")		{action: [POST: "receiveStreamStatus"]}
+		}
 		//Web Diagnostics Pages
 		if(settings?.enDiagWebPage == true || getDevOpt()) {
 			path("/processCmd") 	{action: [POST: "procDiagCmd"]}
@@ -240,16 +242,15 @@ def mainPage() {
 		section("") {
 			href "changeLogPage", title: "", description: "${appInfoDesc()}", image: getAppImg("nst_manager_5%402x.png", true)
 			if(settings?.restStreaming) {
-				def rStrEn = (atomicState?.appData?.eventStreaming?.enabled || getDevOpt() || betaMarker())
-				href "pollPrefPage", title: "", state: ((atomicState?.restStreamingOn && rStrEn) ? "complete" : null), image: getAppImg("two_way_icon.png"),
-						description: "Nest Streaming: (${(!atomicState?.restStreamingOn || !rStrEn) ? "Inactive" : "Active"})"
+				Boolean strOn = atomicState?.restStreamingOn
+				href "pollPrefPage", title: "", state: (strOn ? "complete" : null), image: getAppImg("two_way_icon.png"), description: "Nest Streaming: (${!strOn ? "Inactive" : "Active"})"
 			}
 			if(atomicState?.appData && !appDevType()) {
 				if(isAppUpdateAvail()) {
 					href url: stIdeLink(), style:"external", required: false, title:"An Update is Available for ${appName()}!",
 						description:"Current: v${appVersion()} | New: ${atomicState?.appData?.updater?.versions?.app?.ver}\n\nTap to Open the IDE in Browser", state: "complete", image: getAppImg("update_icon.png")
 				}
-				if(atomicState?.clientBlacklisted) {
+				if(atomicState?.cltBlacklisted) {
 					paragraph "This ID is blacklisted, please update software!\nIf software is up to date, contact developer", required: true, state: null
 				}
 			}
@@ -320,7 +321,7 @@ def mainPage() {
 
 // NEW STORAGE SmartApp
 def storageInfoSect() {
-	if(!atomicState?.isInstalled || isAppLiteMode()) { return "" }
+	if(!atomicState?.isInstalled || isAppLiteMode() || (stateSz < 55)) { return "" }
 	def storApp = getStorageApp()
 	section("Storage App Info:") {
 		if(storApp) {
@@ -329,7 +330,7 @@ def storageInfoSect() {
 			str += "\nUsage: ${storApp?.getStateSizePerc()}%"
 			paragraph str, state: "complete"
 		} else {
-			paragraph "Error: Storage SmartApp Is Not Installed...", required: true, state: null
+			paragraph "Storage SmartApp Is Not Installed..."
 		}
 	}
 }
@@ -351,14 +352,14 @@ def updStorageVal(sKey, sValue) {
 	}
 }
 
-def remStorageVal(sKey) {
+def remStorageVal(String sKey) {
 	if(sKey) {
 		def storApp = getStorageApp()
 		if(storApp) { return storApp?.stateRemove(sKey as String) }
 	}
 }
 
-def findStateStorageVal(val) {
+def findStateStorageVal(String val) {
 	def storVal = getStorageVal(val)
 	def stateVal = atomicState?."$val"
 	if(storVal) {
@@ -368,12 +369,12 @@ def findStateStorageVal(val) {
 	return null
 }
 
-def storageAppInst(available) {
+public storageAppInst(Boolean available) {
 	atomicState?.storageAppAvailable = (available == true)
 }
 
 private getStorageApp(honorState = true) {
-	def stateSz = getStateSizePerc()
+	Integer stateSz = getStateSizePerc()
 	if(honorState && stateSz < 55) { return null }
 	if(isAppLiteMode()) { return null }
 	def storApp = getChildApps()?.find { it?.getAutomationType() == "storage" && it?.name == autoAppName() }
@@ -572,7 +573,7 @@ def devPrefPage() {
 		}
 		if(atomicState?.cameras) {
 			section("Camera Devices:") {
-				if(atomicState?.appData?.eventStreaming?.enabled == true || getDevOpt() || betaMarker()) {
+				if(getDevOpt() || betaMarker()) {
 					input "camTakeSnapOnEvt", "bool", title: "Take Snapshot on Motion Events?", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("snapshot_icon.png")
 					input "motionSndChgWaitVal", "enum", title: "Delay before Motion/Sound Events are marked Inactive?", required: false, defaultValue: 60, metadata: [values:waitValAltEnum(true)], submitOnChange: true, image: getAppImg("delay_time_icon.png")
 					input "camEnMotionZoneFltr", "bool", title: "Allow filtering motion events by configured zones?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("motion_icon.png")
@@ -789,10 +790,8 @@ def reviewSetupPage() {
 			href "pollPrefPage", title: "Device | Structure\nPolling Preferences", description: (pollDesc != "" ? "${pollDesc}\n\nTap to modify" : "Tap to configure"), state: (pollDesc != "" ? "complete" : null), image: getAppImg("timer_icon.png")
 		}
 		showDevSharePrefs()
-		if(atomicState?.showHelp) {
-			section("") {
-				href "infoPage", title: "Donations and Info", description: "Tap to view", image: getAppImg("info.png")
-			}
+		section("") {
+			href "infoPage", title: "Donations and Info", description: "Tap to view", image: getAppImg("info.png")
 		}
 		if(!atomicState?.isInstalled) {
 			section("") {
@@ -908,12 +907,12 @@ def voiceRprtPrefPage() {
 	return dynamicPage(name: "voiceRprtPrefPage", title: "Voice Report Preferences", install: false, uninstall: false) {
 		section("Report Customization:") {
 			paragraph "These options allow you to configure how much info is included in the Thermostat voice reporting."
-			if(!atomicState?.appData?.reportPrefs?.disVoiceZoneRprt) {
+			if(!atomicState?.appData?.settings?.reports?.disVoiceZoneRprt) {
 				input ("vRprtIncSchedInfo", "bool", title: "Include Automation Source Schedule Info?", required: false, defaultValue: true, submitOnChange: false, image: getAppImg("nst_automations_5.png"))
 				input ("vRprtIncZoneInfo", "bool", title: "Include Current Zone Info?", required: false, defaultValue: true, submitOnChange: false, image: getAppImg("thermostat_icon.png"))
 				input ("vRprtIncExtWeatInfo", "bool", title: "Include External Info?", required: false, defaultValue: true, submitOnChange: false, image: getAppImg("weather_icon.png"))
 			}
-			if(!atomicState?.appData?.reportPrefs?.disVoiceUsageRprt) {
+			if(!atomicState?.appData?.settings?.reports?.disVoiceUsageRprt) {
 				input ("vRprtIncUsageInfo", "bool", title: "Include Usage Info?", required: false, defaultValue: true, submitOnChange: false, image: getAppImg("usage_icon.png"))
 			}
 		}
@@ -924,30 +923,34 @@ def voiceRprtPrefPage() {
 def pollPrefPage() {
 	def execTime = now()
 	dynamicPage(name: "pollPrefPage", title: "Polling Preferences", install: false) {
-		if(atomicState?.appData?.eventStreaming?.enabled == true || getDevOpt()) {
-			section("Rest Streaming (Experimental):") {
-				input(name: "restStreaming", title:"Enable Rest Streaming?", type: "bool", defaultValue: false, required: false, submitOnChange: true, image: getAppImg("two_way_icon.png"))
-				if(!settings?.restStreaming) {
-					paragraph title: "Streaming is an Experimental Feature (Even though it's Stable)", "It requires the install of our local NodeJS streaming service running on your home network."
-					href url: streamLink(), style:"external", required: false, title:"Setup Instructions", description:"Tap to open in browser", state: "complete", image: getAppImg("web_icon.png")
-				}
+		section("Rest Streaming (Experimental):") {
+			input(name: "restStreaming", title:"Enable Rest Streaming?", type: "bool", defaultValue: false, required: false, submitOnChange: true, image: getAppImg("two_way_icon.png"))
+			if(!settings?.restStreaming) {	
+				paragraph title: "Streaming is an Experimental Feature (Even though it's Stable)", "It requires the install of our local NodeJS streaming service running on your home network."
+				href url: streamLink(), style:"external", required: false, title:"Setup Instructions", description:"Tap to open in browser", state: "complete", image: getAppImg("web_icon.png")
 			}
-			if(settings?.restStreaming) {
-				section("Configure Streaming Service:") {
-					href "restSrvcDiscovery", title: "Auto-Discover Local Service", state: (settings?.selectedRestDevice ? "complete" : null), image: getAppImg("search_icon.png"),
-							description: selectedRestDiscSrvcDesc() ? "Selected Service:\n${selectedRestDiscSrvcDesc()}" : "Discover NST Service on your local network"
-					if(!settings?.selectedRestDevice) {
-						input(name: "restStreamIp", title:"Rest Service Address", type: "text", required: true, submitOnChange: true, image: getAppImg("ip_icon.png"))
-						input(name: "restStreamPort", title:"Rest Service Port", type: "number", defaultValue: 3000, required: true, submitOnChange: true, image: getAppImg("port_icon.png"))
-					}
-					getRestSrvcDesc()
-					paragraph title: "Notice", "This is still an experimental feature. It's subject to your local network and internet connections. If communication is lost the Manager will default back to standard polling."
-				}
-			} else {
-				restDiscoveryClean()
-			}
-			startStopStream()
 		}
+		if(settings?.restStreaming) {
+			section("Configure Streaming Service:") {
+				href "restSrvcDiscovery", title: "Auto-Discover Local Service", state: (settings?.selectedRestDevice ? "complete" : null), image: getAppImg("search_icon.png"),
+						description: selectedRestDiscSrvcDesc() ? "Selected Service:\n${selectedRestDiscSrvcDesc()}" : "Discover NST Service on your local network"
+				if(!settings?.selectedRestDevice) {
+					input(name: "restStreamIp", title:"Rest Service Address", type: "text", required: true, submitOnChange: true, image: getAppImg("ip_icon.png"))
+					input(name: "restStreamPort", title:"Rest Service Port", type: "number", defaultValue: 3000, required: true, submitOnChange: true, image: getAppImg("port_icon.png"))
+				}
+				input(name: "restStreamLocal", title:"Use Local Network to Send Events?", type: "bool", defaultValue: false, required: false, submitOnChange: true, image: getAppImg("two_way_icon.png"))
+				if(settings?.restStreamLocal == true) { 
+					input(name: "restStreamLocalHub", type: "hub", title: "Select Local Hub", description: "This is the hub Stream events will be sent to.", submitOnChange: true, image: getAppImg("hub_icon.png"))
+					if(settings?.restStreamLocal && settings?.restStreamLocalHub) { subscribe(location, null, lanStreamEvtHandler, [filterEvents:false]) }
+				} 
+				getRestSrvcDesc()
+				paragraph title: "Notice", "This is still an experimental feature. It's subject to your local network and internet connections. If communication is lost the Manager will default back to standard polling."
+			}
+		} else {
+			restDiscoveryClean()
+		}
+		startStopStream()
+
 		section("Polling:") {
 			if(settings?.restStreaming && getRestHost()) {
 				paragraph title: "NOTICE!", "These settings are only used when rest streaming is inactive or disabled", required: true, state: null, image: getAppImg("info_icon2.png")
@@ -1482,7 +1485,7 @@ def notifPrefPage() {
 				def autoDesc = t1 ? "${t1}\n\n" : ""
 				href "notifConfigPage", title: "Automation Notifications", description: "${autoDesc}Tap to configure", params: [pType:"auto"], state: (autoDesc != "" ? "complete" : null),
 						image: getAppImg("nst_automations_5.png")
-				if(atomicState?.appData?.aaPrefs?.enAaMsgQueue == true) {
+				if(atomicState?.appData?.settings?.askAlexa?.enAaMsgQueue == true) {
 					t1 = getAskAlexaDesc()
 					def aaDesc = t1 ? "${t1}\n\n" : ""
 					href "notifConfigPage", title: "AskAlexa Integration", description: "${aaDesc}Tap to configure", params: [pType:"askAlexa"], state: (aaDesc != "" ? "complete" : null),
@@ -1913,20 +1916,10 @@ def getRemDiagApp() {
 	} else {
 		return null
 	}
-/*
-	def remDiagApp = null
-	def cApps = getChildApps()
-	cApps?.each { ca ->
-		if(ca?.getAutomationType() == "remDiag") {
-			remDiagApp = ca
-		}
-	}
-	return remDiagApp
-*/
 }
 
 void diagLogProcChange(setOn) {
-	def diagAllowed = atomicState?.appData?.database?.allowRemoteDiag == true ? true : false
+	def diagAllowed = true
 	//log.debug "diagAllowed: $diagAllowed"
 	def doInit = false
 	def msg = "Remote Diagnostic Logs "
@@ -2020,11 +2013,6 @@ def devPageFooter(var, eTime) {
 	def data = atomicState?.usageMetricsStore ?: [:]
 	data[var] = data[var] != null ? data[var.toString()].toInteger() + 1 : 1
 	atomicState?.usageMetricsStore = data
-	// if(getDevOpt()) {
-	// 	res += 	section() {
-	// 		paragraph "    Page Loads: (${atomicState?.usageMetricsStore["${var}"] ?: 0}) | LoadTime: (${eTime ? (now()-eTime) : 0}ms)"
-	// 	}
-	// }
 	return res?.size() ? res : ""
 }
 
@@ -2072,7 +2060,7 @@ def getSafetyValuesDesc() {
 }
 
 def showVoiceRprtPrefs() {
-	if(atomicState?.thermostats && (!atomicState?.appData?.reportPrefs?.disVoiceZoneRprt || !atomicState?.appData?.reportPrefs?.disVoiceUsageRprt)) {
+	if(atomicState?.thermostats && (!atomicState?.appData?.settings?.reports?.disVoiceZoneRprt || !atomicState?.appData?.settings?.reports?.disVoiceUsageRprt)) {
 		def rPrefs = getVoiceRprtPrefDesc()
 		section("Voice Reports:") {
 			href "voiceRprtPrefPage", title: "Voice Report Preferences", description: (rPrefs ? "${rPrefs}\n\nTap to modify" : "Tap to configure"), state: (rPrefs ? "complete" : ""), image: getAppImg("speech2_icon.png")
@@ -2082,8 +2070,8 @@ def showVoiceRprtPrefs() {
 
 def getVoiceRprtPrefs() {
 	return [
-		"allowVoiceUsageRprt":(atomicState?.appData?.reportPrefs?.disVoiceUsageRprt == true) ? false : true,
-		"allowVoiceZoneRprt":(atomicState?.appData?.reportPrefs?.disVoiceZoneRprt == true) ? false : true,
+		"allowVoiceUsageRprt":(atomicState?.appData?.settings?.reports?.disVoiceUsageRprt == true) ? false : true,
+		"allowVoiceZoneRprt":(atomicState?.appData?.settings?.reports?.disVoiceZoneRprt == true) ? false : true,
 		"vRprtSched":(settings?.vRprtIncSchedInfo == false ? false : true),
 		"vRprtZone":(settings?.vRprtIncZoneInfo == false ? false : true),
 		"vRprtExtWeat":(settings?.vRprtIncExtWeatInfo == false ? false : true),
@@ -2103,13 +2091,12 @@ def getVoiceRprtPrefDesc() {
 }
 
 def getPollingConfDesc() {
-	def rStrEn = (atomicState?.appData?.eventStreaming?.enabled || getDevOpt() || betaMarker())
 	def pollValDesc = (!settings?.pollValue || settings?.pollValue == "180") ? "" : (!atomicState?.streamPolling ? " (Custom)" : " (Stream)")
 	def pollStrValDesc = (!settings?.pollStrValue || settings?.pollStrValue == "180") ? "" : (!atomicState?.streamPolling ? " (Custom)" : " (Stream)")
 	def pollWeatherValDesc = (!settings?.pollWeatherValue || settings?.pollWeatherValue == "900") ? "" : " (Custom)"
 	def pollWaitValDesc = (!settings?.pollWaitVal || settings?.pollWaitVal == "10") ? "" : " (Custom)"
 	def pStr = ""
-	pStr += rStrEn ? "Nest Stream: (${(settings.restStreaming && rStrEn) ? "${(!atomicState?.restStreamingOn) ? "Not Active" : "Active"}" : "Off"})" : ""
+	pStr += "Nest Stream: (${settings.restStreaming ? (!atomicState?.restStreamingOn ? "Not Active" : "Active") : "Off"})"
 	pStr += "\nPolling: (${!atomicState?.pollingOn ? "Not Active" : "Active"})"
 	pStr += "\n• Device: (${getInputEnumLabel((!atomicState?.streamPolling ? (pollValue ?: 180) : 300), pollValEnum(true))}) ${pollValDesc}"
 	pStr += "\n• Structure: (${getInputEnumLabel((!atomicState?.streamPolling ? (pollStrValue?:180) : 300), pollValEnum())}) ${pollStrValDesc}"
@@ -2266,7 +2253,6 @@ def updated() {
 def uninstalled() {
 	//LogTrace("uninstalled")
 	uninstManagerApp()
-	//sendNotificationEvent("${appName()} is uninstalled")
 }
 
 def initialize() {
@@ -2968,21 +2954,20 @@ def askAlexaMQHandler(evt) {
 }
 
 def startStopStream() {
-	def strEn = (atomicState?.appData?.eventStreaming?.enabled == true || getDevOpt() || betaMarker()) ? true : false
-	if((!strEn || !settings?.restStreaming) && !atomicState?.restStreamingOn) {
+	if((!settings?.restStreaming) && !atomicState?.restStreamingOn) {
 		return
 	}
-	if(strEn && settings?.restStreaming && atomicState?.restStreamingOn) {
+	if(settings?.restStreaming && atomicState?.restStreamingOn) {
 		runIn(45, "restStreamCheck", [overwrite: true])
 		return
 	}
-	if(strEn && settings?.restStreaming && !atomicState?.restStreamingOn) {
-		//LogAction("Sending restStreamHandler(Start) Event to local node service", "debug", true)
+	if(settings?.restStreaming && !atomicState?.restStreamingOn) {
+		LogTrace("startStopStream: Stream not on, Sending restStreamHandler(Start) Event to local node service")
 		restStreamHandler()
 		runIn(45, "restStreamCheck", [overwrite: true])
 	}
-	else if ((!settings?.restStreaming || !strEn) && atomicState?.restStreamingOn) {
-		//LogAction("Sending restStreamHandler(Stop) Event to local node service", "debug", true)
+	else if (!settings?.restStreaming && atomicState?.restStreamingOn) {
+		LogTrace("startStopStream: Streaming should not be running Sending restStreamHandler(Stop) Event to local node service")
 		restStreamHandler(true)
 		atomicState?.restStreamingOn = false
 		runIn(45, "restStreamCheck", [overwrite: true])
@@ -3033,12 +3018,16 @@ def restStreamHandler(close = false) {
 	LogTrace("restStreamHandler(close: ${close}) host: ${host} lastRestHost: ${atomicState?.lastRestHost}")
 	def connStatus = toClose ? false : true
 	LogAction("restStreamHandler(${connStatus ? "Start" : "Stop"}) Event to local node service", "debug", true)
+	String hubIp = settings?.restStreamLocalHub?.getLocalIP()
+	Boolean localStream = (settings?.restStreamLocal == true && hubIp)
 	try {
 		def hubAction = new physicalgraph.device.HubAction(
 			method: "POST",
 			headers: [
 				"HOST": host,
 				"nesttoken": "${atomicState?.authToken}",
+				"stHubIp": "${hubIp}",
+				"localStream": "${localStream}",
 				"connStatus": "${connStatus}",
 				"callback": "${getApiURL()}",
 				"sttoken": "${atomicState?.accessToken}",
@@ -3064,6 +3053,8 @@ def restStreamCheck() {
 		return
 	}
 	LogTrace("restStreamCheck host: ${host}")
+	String hubIp = settings?.restStreamLocalHub?.getLocalIP()
+	Boolean localStream = (settings?.restStreamLocal == true && hubIp)
 	try {
 		atomicState.lastRestHost = host
 		def hubAction = new physicalgraph.device.HubAction(
@@ -3071,6 +3062,8 @@ def restStreamCheck() {
 			headers: [
 				"HOST": host,
 				"callback": "${getApiURL()}",
+				"stHubIp": "${hubIp}",
+				"localStream": "${localStream}",
 				"sttoken": "${atomicState?.accessToken}",
 				"structure": "${atomicState?.structures}"
 			],
@@ -3085,8 +3078,8 @@ def restStreamCheck() {
 	}
 }
 
-def receiveStreamStatus() {
-	def resp = request?.JSON
+def receiveStreamStatus(eventData=null) {
+	def resp = eventData == null ? request?.JSON : eventData
 	if(resp) {
 		def t0 = resp?.streaming == true ? true : false
 		def t1 = atomicState?.restStreamingOn
@@ -3095,7 +3088,7 @@ def receiveStreamStatus() {
 		}
 		atomicState?.restStreamingOn = t0
 		if(!settings?.restStreaming && t0) {		// suppose to be off
-			//LogAction("Sending restStreamHandler(Stop) Event to local node service", "debug", false)
+			//LogAction("receiveStreamStatus: Sending restStreamHandler(Stop) Event to local node service", "debug", true)
 			restStreamHandler(true)
 		} else if (settings?.restStreaming && !atomicState?.restStreamingOn) {		// suppose to be on
 			runIn(45, "startStopStream", [overwrite: true])
@@ -3118,8 +3111,11 @@ def receiveStreamStatus() {
 			}
 		}
 		atomicState?.restServiceData = resp
-
-		render contentType: 'text/html', data: "status received...ok", status: 200
+		if(eventData) {
+			return [data: "status received...ok", status: 200]
+		} else {
+			render contentType: 'text/html', data: "status received...ok", status: 200
+		}
 	}
 }
 
@@ -3138,7 +3134,7 @@ def uninstManagerApp() {
 			}
 			//If any client related data exists on firebase it will be removed
 			//clearRemDiagData(true)
-			clearAllAutomationBackupData()
+			//clearAllAutomationBackupData()
 			//sends notification of uninstall
 			sendNotificationEvent("${appName()} is uninstalled")
 		}
@@ -3292,14 +3288,19 @@ def getInstAutoTypesDesc() {
 
 def subscriber() {
 	subscribe(app, onAppTouch)
-	if(atomicState.appData?.aaPrefs?.enMultiQueue && settings?.allowAskAlexaMQ) {
+	if(atomicState.appData?.settings?.askAlexa?.enMultiQueue && settings?.allowAskAlexaMQ) {
 		subscribe(location, "askAlexaMQ", askAlexaMQHandler) //Refreshes list of available AA queues
 	}
+	//Pushover Manager Init/cleanup
 	if(settings?.pushoverEnabled == true) {
 		pushover_init()
 	} else { pushover_cleanup() }
+	//Rest Stream Subriptions
 	if(settings?.restStreaming && !getRestHost()) {
 		restSrvcSubscribe()
+	}
+	if(settings?.restStreaming && settings?.restStreamLocal && settings?.restStreamLocalHub) { 
+		subscribe(location, null, lanStreamEvtHandler, [filterEvents:false])
 	}
 }
 
@@ -3373,15 +3374,13 @@ private gcd(input = []) {
 }
 
 def onAppTouch(event) {
-
-/*
-// ERS Debug to remove
-		def sData = atomicState?.swVer ?: [:]
-		sData["mgrVer"] = "tester"
-		atomicState?.swVer = sData
-		return
-*/
-
+	/*
+	// ERS Debug to remove
+			def sData = atomicState?.swVer ?: [:]
+			sData["mgrVer"] = "tester"
+			atomicState?.swVer = sData
+			return
+	*/
 	stateCleanup()
 	createSavedNest()
 	poll(true)
@@ -3464,18 +3463,7 @@ def poll(force = false, type = null) {
 			return
 		}
 		startStopStream()
-
-		//def pollStrTime = !settings?.pollStrValue ? 180 : settings?.pollStrValue.toInteger()
-		//if(pollTime < 60 || pollStrTime < 60) {
-		// if(pollTime < 60 && !atomicState?.apiRateLimited) {
-		// 	if(atomicState?.pollTock) {
-		// 		atomicState.pollTock = false
-		// 		runIn(30, "pollFollow", [overwrite: true])
-		// 	} else {
-		// 		atomicState.pollTock = true
-		// 	}
-		// }
-
+		
 		def okStruct = ok2PollStruct()
 		def okDevice = ok2PollDevice()
 		def okMeta = ok2PollMetaData()
@@ -3484,46 +3472,28 @@ def poll(force = false, type = null) {
 		def str = false
 		if(!okDevice && !okStruct && !(getLastHeardFromNestSec() > pollTimeout*2)) {
 			LogAction("No Device or Structure poll - Devices Last Updated: ${getLastDevicePollSec()} seconds ago | Structures Last Updated ${getLastStructPollSec()} seconds ago", "info", true)
-		}
-		else {
+		} else {
 			def sstr = ""
-			def allowAsync = false
-			def metstr = "sync"
-			if(atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
-				allowAsync = true
-				metstr = "async"
-			}
+			def metstr = "async"
 			if(okStruct) {
 				sstr += "Updating Structure Data (Last Updated: ${getLastStructPollSec()} seconds ago)"
-				if(allowAsync) {
-					str = queueGetApiData("str")
-				} else {
-					str = getApiData("str")
-				}
+				str = queueGetApiData("str")
 			}
 			if(okDevice) {
 				sstr += sstr != "" ? " | " : ""
 				sstr += "Updating Device Data (Last Updated: ${getLastDevicePollSec()} seconds ago)"
-				if(allowAsync) {
-					dev = queueGetApiData("dev")
-				} else {
-					dev = getApiData("dev")
-				}
+				dev = queueGetApiData("dev")
 			}
 			if(okMeta) {
 				sstr += sstr != "" ? " | " : ""
 				sstr += "Updating Meta Data(Last Updated: ${getLastMetaPollSec()} seconds ago)"
-				if(allowAsync) {
-					meta = queueGetApiData("meta")
-				} else {
-					meta = getApiData("meta")
-				}
+				meta = queueGetApiData("meta")
 			}
 			if(sstr != "") { LogAction("${sstr} (${metstr})", "info", true) }
-			if(allowAsync) { return }
+			return
 		}
 		finishPoll(str, dev)
-	} else if(atomicState?.clientBlacklisted) {
+	} else if(atomicState?.cltBlacklisted) {
 		LogAction("Client poll is BLACKLISTED. Please contact the Developer", "warn", true)
 		finishPoll(false, true)
 	}
@@ -3837,14 +3807,14 @@ def procNestResponse(resp, data) {
 	}
 }
 
-def receiveEventData() {
+def receiveEventData(eventData=null) {
 	def status = [:]
 	try {
-		def evtData = request?.JSON
+		def evtData = eventData == null ? request?.JSON : eventData
 		//LogAction("evtData: $evtData", "trace", true)
 		def devChgd = false
 		def gotSomething = false
-		if(evtData?.data && settings?.restStreaming) {
+		if(evtData?.data && settings?.restStreaming && atomicState?.restStreamingOn) {
 			if(evtData?.data?.devices) {
 				//LogTrace("API Device Resp.Data: ${evtData?.data?.devices}")
 				gotSomething = true
@@ -3871,19 +3841,24 @@ def receiveEventData() {
 				//LogTrace("API Metadata Resp.Data: ${evtData?.data?.metadata}")
 				gotSomething = true
 				def chg = didChange(atomicState?.metaData, evtData?.data?.metadata, "meta", "stream")
-				if(!chg) {
-					LogTrace("got metaData")
-				}
+				if(!chg) { LogTrace("got metaData") }
 			}
 		} else {
-			LogTrace("receiveEventData: Sending restStreamHandler(Stop)")
-			restStreamHandler(true)
+			def forceStop = false
+			if(!settings?.restStreaming) { forceStop = true }
+			if(!forceStop && !atomicState?.restStreamingOn) {
+				LogAction("receiveEventData: stream not on yet, ignoring", "debug", true)
+			}
+			if(forceStop) {
+				LogAction("receiveEventData: Sending restStreamHandler(Stop)", "warn", true)
+				restStreamHandler(true)
+			}
 		}
 		if(gotSomething) {
 			updTimestampMap("lastHeardFromNestDt", getDtNow())
 			if(atomicState?.ssdpOn == true) {
 				unsubscribe() //These were causing exceptions
-				atomicState.ssdpOn = false
+				atomicState?.ssdpOn = false
 				subscriber()
 			}
 			apiIssueEvent(false)
@@ -3894,26 +3869,61 @@ def receiveEventData() {
 		if(atomicState?.forceChildUpd || atomicState?.needChildUpd || devChgd) {
 			schedFinishPoll(devChgd)
 		}
-		status = ["data":"status received...ok", "code":200]
+		status = [data:"status received...ok", code:200]
 	} catch (ex) {
 		log.error "receiveEventData Exception:", ex
 		LogAction("receiveEventData Exception: ${ex}", "error", true)
-		status = ["data":"${ex?.message}", "code":500]
+		status = [data:"${ex?.message}", code:500]
+	}
+	if(eventData) {
+		return status
+	} else {
+		render contentType: 'text/html', data: status?.data, status: status?.code
+	}
+}
+
+def lanStreamEvtHandler(evt) {
+	// log.trace "lanStreamEvtHandler..."
+	def status = [:]
+	try {
+		def msg = parseLanMessage(evt?.description)
+		Map headerMap = msg?.headers
+		// log.debug "lanStreamEvtHandler... | headers: ${headerMap}"
+		Map msgData = [:]
+		if (headerMap?.size()) {
+			if (headerMap?.evtSource && headerMap?.evtSource == "NST_Stream") {
+				if (msg?.body != null) {
+					def slurper = new groovy.json.JsonSlurper()
+					msgData = slurper.parseText(msg?.body)
+					// log.debug "msgData: $msgData"
+					if(headerMap?.evtType) { 
+						switch(headerMap?.evtType) {
+							case "streamStatus":
+								status = receiveStreamStatus(msgData)
+								break
+							case "sendEventData":
+								status = receiveEventData(msgData)
+								break
+						}
+					}
+				}
+			}
+		}
+	} catch (ex) {
+		log.error "lanStreamEvtHandler Exception:", ex
+		status = [data:"${ex?.message}", code: 500]
 	}
 	render contentType: 'text/html', data: status?.data, status: status?.code
 }
 
 def didChange(old, newer, type, src) {
 	//LogTrace("didChange: type: $type src: $src")
-	def result = false
-	def srcStr = src.toString().toUpperCase()
+	Boolean result = false
+	String srcStr = src.toString().toUpperCase()
 	if(newer != null) {
 		if(type == "str") {
 			updTimestampMap("lastStrucDataUpd", getDtNow())
 			atomicState.needStrPoll = false
-			// if(atomicState?.structures) {
-			// 	LogAction("NestAPI AWAY Debug | Current: (${newer[atomicState?.structures]?.away})${(newer[atomicState?.structures]?.away != old[atomicState?.structures]?.away) ? " | Previous: (${old[atomicState?.structures]?.away})" : ""}", "trace", false)
-			// }
 			newer.each {
 				if(it?.value) {
 					def myId = it?.value?.structure_id
@@ -3953,8 +3963,6 @@ def didChange(old, newer, type, src) {
 		}
 		if(old != newer) {
 			if(type == "str") {
-				// def t0 = atomicState?.structData?.size() && atomicState?.structures ? atomicState?.structData[atomicState?.structures] : null
-				// def t1 = newer && atomicState?.structures ? newer[atomicState?.structures] : null
 				def tt0 = atomicState?.structData?.size() ? atomicState?.structData : null
 				// Null safe does not work on array references that miss
 				def t0 = tt0 && atomicState?.structures && tt0?."${atomicState?.structures}" ? tt0[atomicState?.structures] : null
@@ -4156,19 +4164,18 @@ def updateChildData(force = false) {
 		def useMt = !useMilitaryTime ? false : true
 		def dbg = !childDebug ? false : true
 		def logNamePrefix = (settings?.debugAppendAppName || settings?.debugAppendAppName == null) ? true : false
-		def remDiag = (atomicState?.appData?.database?.allowRemoteDiag && atomicState?.enRemDiagLogging && settings?.enRemDiagLogging) ? true: false
+		def remDiag = (atomicState?.enRemDiagLogging && settings?.enRemDiagLogging) ? true: false
 		def nestTz = getNestTimeZone()?.toString()
 		def api = !apiIssues() ? false : true
-		def htmlInfo = getHtmlInfo()
 		def mobClientType = settings?.mobileClientType
 		def vRprtPrefs = getVoiceRprtPrefs()
-		def clientBl = atomicState?.clientBlacklisted == true ? true : false
-		def hcCamTimeout = atomicState?.appData?.healthcheck?.camTimeout ?: 120
-		def hcProtWireTimeout = atomicState?.appData?.healthcheck?.protWireTimeout ?: 45
-		def hcProtBattTimeout = atomicState?.appData?.healthcheck?.protBattTimeout ?: 1500
-		def hcTstatTimeout = atomicState?.appData?.healthcheck?.tstatTimeout ?: 45
-		def hcLongTimeout = atomicState?.appData?.healthcheck?.longTimeout ?: 120
-		def hcRepairEnabled = atomicState?.appData?.healthcheck?.repairEnabled != false ? true : false
+		def clientBl = atomicState?.cltBlacklisted == true ? true : false
+		def hcCamTimeout = atomicState?.appData?.settings?.healthcheck?.camTimeout ?: 120
+		def hcProtWireTimeout = atomicState?.appData?.settings?.healthcheck?.protWireTimeout ?: 45
+		def hcProtBattTimeout = atomicState?.appData?.settings?.healthcheck?.protBattTimeout ?: 1500
+		def hcTstatTimeout = atomicState?.appData?.settings?.healthcheck?.tstatTimeout ?: 45
+		def hcLongTimeout = atomicState?.appData?.settings?.healthcheck?.longTimeout ?: 120
+		def hcRepairEnabled = atomicState?.appData?.settings?.healthcheck?.repairEnabled != false ? true : false
 		def locPresence = getLocationPresence()
 		def locSecurityState = getSecurityState()
 		def locEtaBegin = getEtaBegin()
@@ -4220,7 +4227,7 @@ def updateChildData(force = false) {
 				}
 				def autoSchedData = oldTstatSchedData as Map
 				def tData = ["data":atomicState?.deviceData?.thermostats[devId], "mt":useMt, "debug":dbg, "tz":nestTz, "apiIssues":api, "safetyTemps":safetyTemps, "comfortHumidity":comfortHumidity,
-						"comfortDewpoint":comfortDewpoint, "pres":locPresence, "childWaitVal":getChildWaitVal().toInteger(), "htmlInfo":htmlInfo, "allowDbException":allowDbException,
+						"comfortDewpoint":comfortDewpoint, "pres":locPresence, "childWaitVal":getChildWaitVal().toInteger(), "allowDbException":allowDbException,
 						"latestVer":latestTstatVer()?.ver?.toString(), "vReportPrefs":vRprtPrefs, "clientBl":clientBl, "curWeatherData":curWeatherData, "logPrefix":logNamePrefix, "hcTimeout":hcTstatTimeout,
 						"mobileClientType":mobClientType, "enRemDiagLogging":remDiag, "autoSchedData":autoSchedData, "healthNotify":nPrefs?.dev?.devHealth, "showGraphs":showGraphs,
 						"devBannerData":devBannerData, "restStreaming":streamingActive, "isBeta":isBeta, "hcRepairEnabled":hcRepairEnabled, "etaBegin":locEtaBegin ]
@@ -4253,7 +4260,7 @@ def updateChildData(force = false) {
 			else if(devId && atomicState?.protects && atomicState?.deviceData?.smoke_co_alarms && atomicState?.deviceData?.smoke_co_alarms[devId]) {
 				//devCodeIds["protect"] = it?.getDevTypeId()
 				def pData = ["data":atomicState?.deviceData?.smoke_co_alarms[devId], "mt":useMt, "debug":dbg, "showProtActEvts":(!showProtActEvts ? false : true), "logPrefix":logNamePrefix,
-						"tz":nestTz, "htmlInfo":htmlInfo, "apiIssues":api, "allowDbException":allowDbException, "latestVer":latestProtVer()?.ver?.toString(), "clientBl":clientBl,
+						"tz":nestTz, "apiIssues":api, "allowDbException":allowDbException, "latestVer":latestProtVer()?.ver?.toString(), "clientBl":clientBl,
 						"hcWireTimeout":hcProtWireTimeout, "hcBattTimeout":hcProtBattTimeout, "mobileClientType":mobClientType, "enRemDiagLogging":remDiag, "healthNotify":nPrefs?.dev?.devHealth,
 						"devBannerData":devBannerData, "restStreaming":streamingActive, "isBeta":isBeta, "hcRepairEnabled":hcRepairEnabled ]
 				def oldProtData = atomicState?."oldProtData${devId}"
@@ -4286,7 +4293,7 @@ def updateChildData(force = false) {
 				//devCodeIds["camera"] = it?.getDevTypeId()
 				List camMotionZones = (settings?.camEnMotionZoneFltr && settings?."camera_${devId}_zones"?.size()) ? settings?."camera_${devId}_zones" : []
 				def camData = ["data":atomicState?.deviceData?.cameras[devId], "mt":useMt, "debug":dbg, "logPrefix":logNamePrefix, "camMotionZones": camMotionZones,
-						"tz":nestTz, "htmlInfo":htmlInfo, "apiIssues":api, "allowDbException":allowDbException, "latestVer":latestCamVer()?.ver?.toString(), "clientBl":clientBl,
+						"tz":nestTz, "apiIssues":api, "allowDbException":allowDbException, "latestVer":latestCamVer()?.ver?.toString(), "clientBl":clientBl,
 						"hcTimeout":hcCamTimeout, "mobileClientType":mobClientType, "enRemDiagLogging":remDiag, "healthNotify":nPrefs?.dev?.devHealth,
 						"streamNotify":nPrefs?.dev?.camera?.streamMsg, "devBannerData":devBannerData, "restStreaming":streamingActive, "motionSndChgWaitVal":motionSndChgWaitVal,
 						"isBeta":isBeta, "camTakeSnapOnEvt": camTakeSnapOnEvt, "hcRepairEnabled":hcRepairEnabled, "secState":locSecurityState ]
@@ -4349,7 +4356,7 @@ def updateChildData(force = false) {
 			else if(devId && atomicState?.weatherDevice && devId == getNestWeatherId()) {
 				//devCodeIds["weather"] = it?.getDevTypeId()
 				def wData1 = ["weatCond":getWeatherData("curWeather"), "weatForecast":getWeatherData("curForecast"), "weatAstronomy":getWeatherData("curAstronomy"), "weatAlerts":getWeatherData("curAlerts")]
-				def wData = ["data":wData1, "tz":nestTz, "mt":useMt, "debug":dbg, "logPrefix":logNamePrefix, "apiIssues":api, "htmlInfo":htmlInfo,
+				def wData = ["data":wData1, "tz":nestTz, "mt":useMt, "debug":dbg, "logPrefix":logNamePrefix, "apiIssues":api,
 							"allowDbException":allowDbException, "weathAlertNotif":settings?.weathAlertNotif, "latestVer":latestWeathVer()?.ver?.toString(),
 							"clientBl":clientBl, "hcTimeout":hcLongTimeout, "mobileClientType":mobClientType, "enRemDiagLogging":remDiag, "hcRepairEnabled":hcRepairEnabled,
 							"healthNotify":nPrefs?.dev?.devHealth, "showGraphs":showGraphs, "devBannerData":devBannerData, "isBeta":isBeta ]
@@ -4449,7 +4456,7 @@ def updateChildData(force = false) {
 					}
 					def autoSchedData = oldTstatSchedData as Map
 					def tData = ["data":data, "mt":useMt, "debug":dbg, "tz":nestTz, "apiIssues":api, "safetyTemps":safetyTemps, "comfortHumidity":comfortHumidity,
-						"comfortDewpoint":comfortDewpoint, "pres":locPresence, "childWaitVal":getChildWaitVal().toInteger(), "htmlInfo":htmlInfo, "allowDbException":allowDbException,
+						"comfortDewpoint":comfortDewpoint, "pres":locPresence, "childWaitVal":getChildWaitVal().toInteger(), "allowDbException":allowDbException,
 						"latestVer":latestvStatVer()?.ver?.toString(), "vReportPrefs":vRprtPrefs, "clientBl":clientBl, "curWeatherData":curWeatherData, "logPrefix":logNamePrefix, "hcTimeout":hcTstatTimeout,
 						"mobileClientType":mobClientType, "enRemDiagLogging":remDiag, "autoSchedData":autoSchedData, "healthNotify":nPrefs?.dev?.devHealth, "showGraphs":showGraphs,
 						"devBannerData":devBannerData, "restStreaming":streamingActive, "isBeta":isBeta, "hcRepairEnabled":hcRepairEnabled, "etaBegin":locEtaBegin ]
@@ -4665,7 +4672,7 @@ def ok2PollStruct() {
 
 def isPollAllowed() {
 	return (atomicState?.pollingOn && atomicState?.authToken &&
-		!atomicState?.clientBlacklisted &&
+		!atomicState?.cltBlacklisted &&
 		(atomicState?.thermostats || atomicState?.protects || atomicState?.weatherDevice || atomicState?.cameras)) ? true : false
 }
 
@@ -5154,13 +5161,7 @@ def getQueueToWork() {
 
 void schedNextWorkQ(useShort=false) {
 	def cmdDelay = getChildWaitVal()
-
-	def allowAsync = false
-	if(atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
-		allowAsync = true
-	}
-
-	if(useShort && allowAsync) { cmdDelay = 0 }
+	if(useShort) { cmdDelay = 0 }
 	//
 	// This is throttling the rate of commands to the Nest service for this access token.
 	// If too many commands are sent Nest throttling could shut all write commands down for 1 hour to the device or structure
@@ -5186,12 +5187,13 @@ void schedNextWorkQ(useShort=false) {
 			if(queueItemsAvail > 0) { timeVal = 0 }
 		}
 		str = timeVal > cmdDelay || atomicState?.apiRateLimited ? "*RATE LIMITING ON* " : ""
-		//LogAction("schedNextWorkQ │ ${str}queue: ${qnum} │ schedTime: ${timeVal} │ recentSendCmd: ${queueItemsAvail} │ last seconds: ${lastCommandSent} │ cmdDelay: ${cmdDelay} │ allowAsync: ${allowAsync} | runInActive: ${atomicState?.workQrunInActive} | Api Limited: ${atomicState?.apiRateLimited}", "info", true)
+		//LogAction("schedNextWorkQ │ ${str}queue: ${qnum} │ schedTime: ${timeVal} │ recentSendCmd: ${queueItemsAvail} │ last seconds: ${lastCommandSent} │ cmdDelay: ${cmdDelay} | runInActive: ${atomicState?.workQrunInActive} | Api Limited: ${atomicState?.apiRateLimited}", "info", true)
 	} else {
 		timeVal = 0
 	}
 	def actStr = "ALREADY PENDING "
-	if(!atomicState?.workQrunInActive) {
+	if(cmdIsProc()) { actStr = "COMMAND RUNNING " }
+	if(!atomicState?.workQrunInActive && !cmdIsProc() ) {
 		atomicState?.workQrunInActive = true
 		if(timeVal != 0) {
 			actStr = "RUNIN "
@@ -5201,7 +5203,7 @@ void schedNextWorkQ(useShort=false) {
 			workQueue()
 		}
 	}
-	LogAction("schedNextWorkQ ${actStr} │ ${str}queue: ${qnum} │ schedTime: ${timeVal} │ recentSendCmd: ${queueItemsAvail} │ last seconds: ${lastCommandSent} │ cmdDelay: ${cmdDelay} │ allowAsync: ${allowAsync} | runInActive: ${atomicState?.workQrunInActive} | Api Limited: ${atomicState?.apiRateLimited}", "info", true)
+	LogAction("schedNextWorkQ ${actStr} │ ${str}queue: ${qnum} │ schedTime: ${timeVal} │ recentSendCmd: ${queueItemsAvail} │ last seconds: ${lastCommandSent} │ cmdDelay: ${cmdDelay} | runInActive: ${atomicState?.workQrunInActive} | command proc: ${cmdIsProc()} | Api Limited: ${atomicState?.apiRateLimited}", "info", true)
 }
 
 private getRecentSendCmd(qnum) {
@@ -5266,12 +5268,7 @@ void workQueue() {
 	if(qnum == null) { qnum = 0 }
 	if(!atomicState?."cmdQ${qnum}") { atomicState."cmdQ${qnum}" = [] }
 
-	def allowAsync = false
-	def metstr = "sync"
-	if(atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
-		allowAsync = true
-		metstr = "async"
-	}
+	def metstr = "async"
 
 	def cmdQueue = atomicState?."cmdQ${qnum}"
 	try {
@@ -5300,12 +5297,8 @@ void workQueue() {
 					atomicState.forceChildUpd = true
 					cmdres = true
 				} else {
-					if(allowAsync) {
-						cmdres = queueProcNestApiCmd(getNestApiUrl(), cmd[0], cmd[1], cmd[2], cmd[3], qnum, cmd)
-						return
-					} else {
-						cmdres = procNestApiCmd(getNestApiUrl(), cmd[0], cmd[1], cmd[2], cmd[3], qnum, cmd)
-					}
+					cmdres = queueProcNestApiCmd(getNestApiUrl(), cmd[0], cmd[1], cmd[2], cmd[3], qnum, cmd)
+					return
 				}
 				finishWorkQ(cmd, cmdres)
 			} else { LogAction("workQueue: busy processing command", "warn", true) }
@@ -5876,7 +5869,7 @@ def appUpdateNotify(badFile=false, badType=null) {
 		def weatherUpd = atomicState?.weatherDevice ? isWeatherUpdateAvail() : false
 		def camUpd = atomicState?.cameras ? isCamUpdateAvail() : false
 		def streamUpd = atomicState?.restStreamingOn ? isStreamUpdateAvail() : false
-		def blackListed = (atomicState?.appData && !appDevType() && atomicState?.clientBlacklisted) ? true : false
+		def blackListed = (atomicState?.appData && !appDevType() && atomicState?.cltBlacklisted) ? true : false
 		//log.debug "appUpd: $appUpd || protUpd: $protUpd || presUpd: $presUpd || tstatUpd: $tstatUpd || weatherUpd: $weatherUpd || camUpd: $camUpd || blackListed: $blackListed || badFile: $badFile"
 		if(appUpd || autoappUpd || protUpd || presUpd || tstatUpd || weatherUpd || camUpd || streamUpd || blackListed || badFile) {
 			def str = ""
@@ -5892,7 +5885,7 @@ def appUpdateNotify(badFile=false, badType=null) {
 			str += !tstatUpd ? "" : "\nThermostat: v${atomicState?.appData?.updater?.versions?.thermostat?.ver?.toString()}"
 			// str += !vtstatUpd ? "" : "\nVirtual Thermostat: v${atomicState?.appData?.updater?.versions?.thermostat?.ver?.toString()}"
 			str += !weatherUpd ? "" : "\nWeather App: v${atomicState?.appData?.updater?.versions?.weather?.ver?.toString()}"
-			str += !streamUpd ? "" : "\nStream Service: v${atomicState?.appData?.eventStreaming?.minVersion?.toString()}"
+			str += !streamUpd ? "" : "\nStream Service: v${atomicState?.appData?.updater?.versions?.stream?.ver?.toString()}"
 			def t0 = badFile ? "Warn" : "Info"
 			if(sendMsg(t0, "${appName()} Update(s) are Available:${str} \n\nPlease visit the IDE to Update code", true)) {
 				updTimestampMap("lastUpdMsgDt", getDtNow())
@@ -5909,7 +5902,7 @@ def updateHandler() {
 			atomicState?.lastCritUpdateInfo = ["dt":getDtNow(), "ver":atomicState?.appData?.updater?.updateVer?.toInteger()]
 		}
 		def t0 = atomicState?.appData?.updater?.updateMsg
-		LogAction("updateHandler: t0 is ${t0}", "info", true)
+		// LogAction("updateHandler: t0 is ${t0}", "info", true)
 		if(t0 != null && t0 != "" && t0 != atomicState?.lastUpdateMsg) {
 			if(getLastUpdateMsgSec() > 86400) {
 				if(sendMsg("Info", "${t0}")) {
@@ -6151,17 +6144,17 @@ def getWeatherDeviceInst() {
 
 def getWebFileData(now = true) {
 	LogTrace("getWebFileData $now")
-	def params = [ uri: "https://raw.githubusercontent.com/${gitPath()}/Data/appData.json", contentType: 'application/json' ]
+	def params = [ uri: getAppSettingsUrl(), contentType: 'application/json' ]
 	def result = false
 	try {
 		def allowAsync = false
 		def metstr = "sync"
-		if(!now && atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
+		if(!now) {
 			allowAsync = true
 			metstr = "async"
 		}
 
-		LogTrace("getWebFileData: Getting appData.json File(${metstr})")
+		LogTrace("getWebFileData: Getting appConfig.json File(${metstr})")
 
 		if(now || !allowAsync) {
 			httpGet(params) { resp ->
@@ -6173,7 +6166,7 @@ def getWebFileData(now = true) {
 	}
 	catch (ex) {
 		if(ex instanceof groovyx.net.http.HttpResponseException) {
-			LogAction("appData.json file not found", "warn", true)
+			LogAction("appConfig.json file not found", "warn", true)
 		} else {
 			log.error "getWebFileData Exception:", ex
 		}
@@ -6194,34 +6187,35 @@ def webResponse(resp, data) {
 		//LogTrace("webResponse Resp: ${newdata}")
 		LogTrace("webResponse appData: ${t0}")
 		if(newdata && t0 != newdata) {
-			LogAction("appData.json File HAS Changed", "info", true)
+			LogAction("appConfig.json File HAS Changed", "info", true)
 			atomicState?.appData = newdata
 			clientBlacklisted()
+			clientMetricBlacklisted()
+			clientExceptionsBlacklisted()
 			updateHandler()
-			helpHandler()
 			setStateVar(true)
-		} else { LogAction("appData.json did not change", "info", false) }
-		if(atomicState?.appData && !appDevType() && atomicState?.clientBlacklisted) {
+		} else { LogAction("appConfig.json did not change", "info", false) }
+		if(atomicState?.appData && !appDevType() && atomicState?.cltBlacklisted) {
 			appUpdateNotify()
 		}
-		if(atomicState?.appData?.appSettings?.pullFromFB == true) {
+		if(atomicState?.appData?.settings?.database?.pullSettingsFromFB == true) {
 			getFbAppSettings(data?.type == "async" ? false : true )
 		}
 		updTimestampMap("lastWebUpdDt", getDtNow())
 		result = true
 	} else {
-		LogAction("Get failed appData.json status: ${resp?.status}", "warn", true)
+		LogAction("Get failed appConfig.json status: ${resp?.status}", "warn", true)
 	}
 	return result
 }
 
 def getFbAppSettings(now = true) {
-	def params = [ uri: "https://st-nest-manager.firebaseio.com/appSettings.json", contentType: 'application/json' ]
+	def params = [ uri: getAppSettingsFBUrl(), contentType: 'application/json' ]
 	def result = false
 	try {
 		def allowAsync = false
 		def metstr = "sync"
-		if(!now && atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
+		if(!now) {
 			allowAsync = true
 			metstr = "async"
 		}
@@ -6285,31 +6279,44 @@ def getWebData(params, desc, text=true) {
 	}
 }
 
-def clientBlacklisted() {
-	if(atomicState?.clientBlacklisted == null) { atomicState?.clientBlacklisted == false }
-	def curBlState = atomicState?.clientBlacklisted
-	if(atomicState?.isInstalled && atomicState?.appData?.clientBL) {
-		def clientList = atomicState?.appData?.clientBL?.clients
-		if(clientList != null || clientList != []) {
-			def isBL = (atomicState?.installationId in clientList) ? true : false
-			if(curBlState != isBL) {
-				atomicState?.clientBlacklisted = isBL
-			}
-		} else { atomicState?.clientBlacklisted = false }
-	} else { atomicState?.clientBlacklisted = false }
+private clientBlacklisted() {
+	Boolean isBl = false
+	List clList = atomicState?.appData?.blacklists?.clients ?: []
+	if(atomicState?.isInstalled && atomicState?.installationId && clList?.size()) {
+		isBl = (atomicState?.installationId in clList)
+	}
+	atomicState?.cltBlacklisted = isBl
 }
 
-def broadcastCheck() {
+private clientMetricBlacklisted() {
+	Boolean isBl = false
+	List clList = atomicState?.appData?.blacklists?.metrics ?: []
+	if(atomicState?.isInstalled && clList?.size()) {
+		isBl = (atomicState?.installationId in clList)
+	}
+	atomicState?.cltMetBlacklisted = isBl
+}
+
+private clientExceptionsBlacklisted() {
+	Boolean isBl = false
+	List clList = atomicState?.appData?.blacklists?.exceptions ?: []
+	if(atomicState?.isInstalled && clList?.size()) {
+		isBl = (atomicState?.installationId in clList)
+	}
+	atomicState?.cltExcBlacklisted = isBl
+}
+
+private broadcastCheck() {
 	LogTrace("broadcastCheck")
-	def bCastData = atomicState?.appData?.broadcast
+	Map bCastData = atomicState?.appData?.broadcast
 	if(atomicState?.isInstalled && bCastData) {
-		if(bCastData?.msgId != "" && bCastData?.message != "" && atomicState?.lastBroadcastId != bCastData?.msgId) {
+		if(bCastData?.msgId != "" && bCastData?.message != "" && atomicState?.lastBroadcastId != bCastData?.msgId && (bCastData?.minVer == "" || bCastData?.minVer != appVersion())) {
 			if(sendMsg(strCapitalize(bCastData?.type), bCastData?.message.toString(), true, null, null, null, true)) {
 				atomicState?.lastBroadcastId = bCastData?.msgId
 			}
 		}
 		if(bCastData?.devBannerMsg != null && atomicState?.devBannerData?.msgId != bCastData?.devBannerMsg?.msgId) {
-			if(bCastData?.devBannerMsg?.msgId && bCastData?.devBannerMsg?.message && bCastData?.devBannerMsg?.type && bCastData?.devBannerMsg?.expireDt) {
+			if(bCastData?.devBannerMsg?.msgId && bCastData?.devBannerMsg?.message && bCastData?.devBannerMsg?.type && bCastData?.devBannerMsg?.expireDt && (bCastData?.devBannerMsg?.minVer == "" || bCastData?.devBannerMsg?.minVer != appVersion())) {
 				def curDt = Date.parse("E MMM dd HH:mm:ss z yyyy", getDtNow())
 				def expDt = Date.parse("E MMM dd HH:mm:ss z yyyy", bCastData?.devBannerMsg?.expireDt.toString())
 				//log.debug "curDt: $curDt | expDt: $expDt | isExpired: ${(curDt > expDt)}"
@@ -6321,31 +6328,12 @@ def broadcastCheck() {
 	}
 }
 
-def helpHandler() {
-	if(atomicState?.appData?.help) {
-		atomicState.showHelp = (atomicState?.appData?.help?.showHelp == false) ? false : true
-	}
-}
-
-def getHtmlInfo() {
-	return "not used"
-/*
-	if(atomicState?.appData?.html?.cssUrl && atomicState?.appData?.html?.cssVer && atomicState?.appData?.html?.chartJsUrl && atomicState?.appData?.html?.chartJsVer ) {
-		return ["cssUrl":atomicState?.appData?.html?.cssUrl, "cssVer":atomicState?.appData?.html?.cssVer, "chartJsUrl":atomicState?.appData?.html?.chartJsUrl, "chartJsVer":atomicState?.appData?.html?.chartJsVer]
-	} else {
-		if(getWebFileData()) {
-			return ["cssUrl":atomicState?.appData?.html?.cssUrl, "cssVer":atomicState?.appData?.html?.cssVer, "chartJsUrl":atomicState?.appData?.html?.chartJsUrl, "chartJsVer":atomicState?.appData?.html?.chartJsVer]
-		}
-	}
-*/
-}
-
 def allowDbException() {
-	if(atomicState?.appData?.database?.disableExceptions != null) {
-		return atomicState?.appData?.database?.disableExceptions == true ? false : true
+	if(atomicState?.appData?.settings?.database?.disableExceptions != null) {
+		return atomicState?.appData?.settings?.database?.disableExceptions == true ? false : true
 	} else {
 		if(getWebFileData()) {
-			return atomicState?.appData?.database?.disableExceptions == true ? false : true
+			return atomicState?.appData?.settings?.database?.disableExceptions == true ? false : true
 		}
 	}
 }
@@ -6355,18 +6343,18 @@ def ver2IntArray(val) {
 	return [maj:"${ver[0]?.toInteger()}",min:"${ver[1]?.toInteger()}",rev:"${ver[2]?.toInteger()}"]
 }
 
-def versionStr2Int(str) { return str ? str.toString()?.replaceAll("\\.", "")?.toInteger() : null }
+Integer versionStr2Int(str) { return str ? str.toString()?.replaceAll("\\.", "")?.toInteger() : null }
 
-def getChildWaitVal() { return settings?.tempChgWaitVal ? settings?.tempChgWaitVal.toInteger() : 4 }
+Integer getChildWaitVal() { return settings?.tempChgWaitVal ? settings?.tempChgWaitVal.toInteger() : 4 }
 
 def getAskAlexaMQEn() {
-	if(atomicState?.appData?.aaPrefs?.enAaMsgQueue == true) {
+	if(atomicState?.appData?.settings?.askAlexa?.enAaMsgQueue == true) {
 		return settings?.allowAskAlexaMQ == null ? true : setting?.allowAskAlexaMQ
 	} else { return false }
 }
 
 def getAskAlexaMultiQueueEn() {
-	return atomicState?.appData?.aaPrefs?.enMultiQueue == true ? true : false
+	return atomicState?.appData?.settings?.askAlexa?.enMultiQueue == true ? true : false
 }
 
 def initAppMetricStore() {
@@ -6445,7 +6433,7 @@ def isWeatherUpdateAvail() {
 }
 
 def isStreamUpdateAvail() {
-	if(isCodeUpdateAvailable(atomicState?.appData?.eventStreaming?.minVersion, atomicState?.swVer?.streamDevVer, "stream")) { return true }
+	if(isCodeUpdateAvailable(atomicState?.appData?.updater?.versions?.stream?.ver, atomicState?.swVer?.streamDevVer, "stream")) { return true }
 	return false
 }
 
@@ -7583,10 +7571,6 @@ def saveLogtoRemDiagStore(String msg, String type, String logSrcType=null, frc=f
 				turnOff = true
 				reasonStr += "was active for last 48 hours "
 			}
-			if(atomicState?.appData?.database?.allowRemoteDiag != true) {
-				turnOff = true
-				reasonStr += "appData does not allow"
-			}
 		}
 		if(turnOff) {
 			saveLogtoRemDiagStore("Diagnostics disabled due to ${reasonStr}", "info", "Manager", true)
@@ -7743,14 +7727,14 @@ def setStateVar(frc = false) {
 	//the app to create any new state values that might not exist or reset those that do to prevent errors
 	def stateVer = 3
 	def stateVar = !atomicState?.stateVarVer ? 0 : atomicState?.stateVarVer.toInteger()
-	if(!atomicState?.stateVarUpd || frc || (stateVer < atomicState?.appData?.state?.stateVarVer?.toInteger())) {
+	if(!atomicState?.stateVarUpd || frc || (stateVer < atomicState?.appData?.settings?.maintenance?.stateVer?.toInteger())) {
 		if(!atomicState?.newSetupComplete)		{ atomicState.newSetupComplete = false }
 		if(!atomicState?.setupVersion)			{ atomicState?.setupVersion = 0 }
 		if(!atomicState?.custLabelUsed)			{ atomicState?.custLabelUsed = false }
 		if(!atomicState?.useAltNames)			{ atomicState.useAltNames = false }
 		if(!atomicState?.apiCommandCnt)			{ atomicState?.apiCommandCnt = 0L }
 		atomicState?.stateVarUpd = true
-		atomicState?.stateVarVer = atomicState?.appData?.state?.stateVarVer ? atomicState?.appData?.state?.stateVarVer?.toInteger() : 0
+		atomicState?.stateVarVer = atomicState?.appData?.settings?.maintenance?.stateVer ? atomicState?.appData?.settings?.maintenance?.stateVer?.toInteger() : 0
 	}
 }
 
@@ -7772,7 +7756,7 @@ def stateCleanup() {
 
 	def data = [ "exLogs", "pollValue", "pollStrValue", "pollWaitVal", "tempChgWaitVal", "cmdDelayVal", "testedDhInst", "missedPollNotif", "updateMsgNotif", "updChildOnNewOnly", "disAppIcons",
 		"showProtAlarmStateEvts", "showAwayAsAuto", "cmdQlist", "cmdQ", "recentSendCmd", "cmdIsProc", "currentWeather", "altNames", "locstr", "custLocStr", "autoAppInstalled", "nestStructures", "lastSentExceptionDataDt",
-		"swVersion", "dashSetup", "dashboardUrl", "apiIssues", "stateSize", "haveRun", "lastStMode", "lastPresSenAway", "devCodeIdData", "appCodeIdData",
+		"swVersion", "dashSetup", "dashboardUrl", "apiIssues", "stateSize", "haveRun", "lastStMode", "lastPresSenAway", "devCodeIdData", "appCodeIdData", "clientBlacklisted",
 		"automationsActive", "temperatures", "powers", "energies", "use24Time", "useMilitaryTime", "advAppDebug", "appDebug", "awayModes", "homeModes", "childDebug", "updNotifyWaitVal",
 		"appApiIssuesWaitVal", "misPollNotifyWaitVal", "misPollNotifyMsgWaitVal", "devHealthMsgWaitVal", "nestLocAway", "heardFromRestDt", "autoSaVer", "lastHeardFromRestDt",
 		"remDiagApp", "remDiagClientId", "restorationInProgress", "diagManagAppStateFilters", "diagChildAppStateFilters", "lastFinishedPoll","tDevVer", "pDevVer", "camDevVer", "presDevVer", "weatDevVer", "vtDevVer", "streamDevVer",
@@ -7856,7 +7840,11 @@ def getIssuePageUrl()		{ return "https://github.com/tonesto7/nest-manager/issues
 def slackMsgWebHookUrl()	{ return "https://hooks.slack.com/services/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" }
 def getAutoHelpPageUrl()	{ return "http://thingsthataresmart.wiki/index.php?title=NST_Manager#Nest_Automations" }
 def weatherApiKey()			{ return "b82aba1bb9a9d7f1" }
-def getFirebaseAppUrl() 	{ return "https://st-nest-manager.firebaseio.com" }
+def getFbLegacyAppUrl() 	{ return "https://st-nest-manager.firebaseio.com" }
+def getFbMetricsUrl() 		{ return atomicState?.appData?.settings?.database?.metricsUrl ?: "https://nst-manager-metrics.firebaseio.com" }
+def getFbExceptionsUrl() 	{ return atomicState?.appData?.settings?.database?.exceptionUrl ?: "https://nst-manager-exceptions.firebaseio.com" }
+def getAppSettingsUrl() 	{ return "https://raw.githubusercontent.com/${gitPath()}/Data/appConfig.json" }
+def getAppSettingsFBUrl() 	{ return "https://st-nest-manager.firebaseio.com/appSettings.json" }
 def getAppImg(imgName, on = null)	{ return (!disAppIcons || on) ? "https://raw.githubusercontent.com/tonesto7/nest-manager/${gitBranch()}/Images/App/$imgName" : "" }
 def getDevImg(imgName, on = null)	{ return (!disAppIcons || on) ? "https://raw.githubusercontent.com/tonesto7/nest-manager/${gitBranch()}/Images/Devices/$imgName" : "" }
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
@@ -7952,7 +7940,7 @@ def getObjType(obj, retType=false) {
 	else { return "unknown"}
 }
 
-def getShowHelp() { return atomicState?.showHelp == false ? false : true }
+def getShowHelp() { return true }
 
 def getTimeZone() {
 	def tz = null
@@ -9561,11 +9549,13 @@ def renderHtmlMapDesc(title, heading, datamap) {
 }
 
 def sendInstallData() {
-	sendFirebaseData(createInstallDataJson(), "installData/clients/${atomicState?.installationId}.json", null, "heartbeat")
+	if(atomicState?.cltMetBlacklisted) {
+		LogAction("Metrics Upload has been BLACKLISTED for this client.", "warn", true)
+	} else { sendFirebaseData(getFbMetricsUrl(), createInstallDataJson(), "clients/${atomicState?.installationId}.json", null, "heartbeat") }
 }
 
 def removeInstallData() {
-	return removeFirebaseData("installData/clients/${atomicState?.installationId}.json")
+	return removeFirebaseData("clients/${atomicState?.installationId}.json")
 }
 
 def sendInstallSlackNotif(inst=true) {
@@ -9599,7 +9589,7 @@ def sendInstallSlackNotif(inst=true) {
 	sendDataToSlack(json, "", "post", "${typeStr} Slack Notif")
 }
 
-def getDbExceptPath() { return atomicState?.appData?.database?.newexceptionPath ?: "newexceptionData" }
+def getDbExceptPath() { return atomicState?.appData?.settings?.database?.exceptionKey ?: "exceptions" }
 
 def sendExceptionData(ex, methodName, isChild = false, autoType = null) {
 	try {
@@ -9607,8 +9597,10 @@ def sendExceptionData(ex, methodName, isChild = false, autoType = null) {
 		def labelstr = (settings?.debugAppendAppName || settings?.debugAppendAppName == null) ? "${app.label} | " : ""
 		//LogAction("${labelstr}sendExceptionData(method: $methodName, isChild: $isChild, autoType: $autoType)", "info", false)
 		LogAction("${labelstr}sendExceptionData(method: $methodName, isChild: $isChild, autoType: $autoType, ex: ${ex})", "error", showErrLog)
-		if(atomicState?.appData?.database?.disableExceptions == true) {
-			;
+		if(atomicState?.appData?.settings?.database?.disableExceptions == true) {
+			// Nothing to see here!
+		} else if(atomicState?.cltExcBlacklisted) {
+			LogAction("Exception Data Upload has been BLACKLISTED for this client.", "warn", true)
 		} else {
 			def exCnt = atomicState?.appExceptionCnt ?: 1
 			atomicState?.appExceptionCnt = exCnt?.toInteger() + 1
@@ -9623,7 +9615,7 @@ def sendExceptionData(ex, methodName, isChild = false, autoType = null) {
 					exData = ["methodName":methodName, "appVersion":(appVersion() ?: "Not Available"),"errorMsg":exString, "errorDt":getDtNow().toString()]
 				}
 				def results = new groovy.json.JsonOutput().toJson(exData)
-				sendFirebaseData(results, "${getDbExceptPath()}/${appType}/${methodName}/${atomicState?.installationId}.json", "post", "Exception")
+				sendFirebaseData(getFbExceptionsUrl(), results, "${getDbExceptPath()}/${appType}/${methodName}/${atomicState?.installationId}.json", "post", "Exception")
 			}
 		}
 		if(ex instanceof physicalgraph.exception.StateCharacterLimitExceededException) {
@@ -9647,7 +9639,7 @@ def sendChildExceptionData(devType, devVer, ex, methodName) {
 		generateInstallId()
 		def exData = ["deviceType":devType, "devVersion":(devVer ?: "Not Available"), "methodName":methodName, "errorMsg":exString, "errorDt":getDtNow().toString()]
 		def results = new groovy.json.JsonOutput().toJson(exData)
-		sendFirebaseData(results, "${getDbExceptPath()}/${devType}/${methodName}/${atomicState?.installationId}.json", "post", "Exception")
+		sendFirebaseData(getFbExceptionsUrl(), results, "${getDbExceptPath()}/${devType}/${methodName}/${atomicState?.installationId}.json", "post", "Exception")
 	}
 }
 
@@ -9655,34 +9647,23 @@ def sendFeedbackData(msg) {
 	def cltId = atomicState?.installationId
 	def exData = ["guid":atomicState?.installationId, "version":appVersion(), "feedbackMsg":(msg ? msg : (settings?.feedbackMsg ?: "No Text")), "msgDt":getDtNow().toString()]
 	def results = new groovy.json.JsonOutput().toJson(exData)
-	if(sendFirebaseData(results, "feedback/data.json", "post", "Feedback")) {
+	if(sendFirebaseData(getFbLegacyAppUrl(), results, "feedback/data.json", "post", "Feedback")) {
 		atomicState?.feedbackPending = false
 		if(!msg) { atomicState?.lastFeedbackData = ["lastMsg":settings?.feedbackMsg, "lastMsgDt":getDtNow().toString(), "lastAppVer":appVersion()] }
 	}
 }
 
-def sendFirebaseData(data, pathVal, cmdType=null, type=null, noAsync=false) {
-	LogAction("sendFirebaseData(${data}, ${pathVal}, $cmdType, $type, $noAsync", "info", true)
-	LogTrace("sendFirebaseData(${data}, ${pathVal}, $cmdType, $type, $noAsync")
-
-	def allowAsync = false
-	def metstr = "sync"
-	if(atomicState?.appData && atomicState?.appData?.pollMethod?.allowAsync) {
-		allowAsync = true
-		metstr = "async"
-	}
-	if(allowAsync && !noAsync) {
-		return queueFirebaseData(data, pathVal, cmdType, type)
-	} else {
-		return syncSendFirebaseData(data, pathVal, cmdType, type)
-	}
+def sendFirebaseData(url, data, pathVal, cmdType=null, type=null) {
+	LogAction("sendFirebaseData(${data}, ${pathVal}, $cmdType, $type", "info", true)
+	LogTrace("sendFirebaseData(${data}, ${pathVal}, $cmdType, $type")
+	return queueFirebaseData(url, data, pathVal, cmdType, type)
 }
 
-def queueFirebaseData(data, pathVal, cmdType=null, type=null) {
+def queueFirebaseData(url, data, pathVal, cmdType=null, type=null) {
 	LogTrace("queueFirebaseData(${data}, ${pathVal}, $cmdType, $type")
 	def result = false
 	def json = new groovy.json.JsonOutput().prettyPrint(data)
-	def params = [ uri: "${getFirebaseAppUrl()}/${pathVal}", body: json.toString() ]
+	def params = [ uri: "${url}/${pathVal}", body: json.toString() ]
 	def typeDesc = type ? "${type}" : "Data"
 	try {
 		if(!cmdType || cmdType == "put") {
@@ -9729,52 +9710,6 @@ def processFirebaseSlackResponse(resp, data) {
 	}
 }
 
-def syncSendFirebaseData(data, pathVal, cmdType=null, type=null) {
-	LogTrace("syncSendFirebaseData(${data}, ${pathVal}, $cmdType, $type")
-	def result = false
-	def json = new groovy.json.JsonOutput().prettyPrint(data)
-	def params = [ uri: "${getFirebaseAppUrl()}/${pathVal}", body: json.toString() ]
-	def typeDesc = type ? "${type}" : "Data"
-	def respData
-	try {
-		if(!cmdType || cmdType == "put") {
-			httpPutJson(params) { resp ->
-				respData = resp
-			}
-		} else if (cmdType == "post") {
-			httpPostJson(params) { resp ->
-				respData = resp
-			}
-		}
-		if(respData) {
-			//log.debug "respData: ${respData}"
-			if(respData?.status == 200) {
-				LogAction("sendFirebaseData: ${typeDesc} Data Sent SUCCESSFULLY", "info", false)
-				if(typeDesc.toString() == "Remote Diag Logs") {
-
-				} else {
-					if(typeDesc?.toString() == "heartbeat") { updTimestampMap("lastAnalyticUpdDt", getDtNow()) }
-				}
-				result = true
-			}
-			else if(respData?.status == 400) {
-				LogAction("sendFirebaseData: 'Bad Request': ${respData?.status}", "error", true)
-			}
-			else {
-				LogAction("sendFirebaseData: 'Unexpected' Response: ${respData?.status}", "warn", true)
-			}
-		}
-	}
-	catch (ex) {
-		if(ex instanceof groovyx.net.http.HttpResponseException) {
-			LogAction("sendFirebaseData: 'HttpResponseException': ${ex?.message}", "error", true)
-		}
-		else { log.error "sendFirebaseData: ([$data, $pathVal, $cmdType, $type]) Exception:", ex }
-		sendExceptionData(ex, "sendFirebaseData")
-	}
-	return result
-}
-
 def sendDataToSlack(data, pathVal, cmdType=null, type=null) {
 	LogAction("sendDataToSlack(${data}, ${pathVal}, $cmdType, $type", "trace", false)
 	def result = false
@@ -9802,8 +9737,11 @@ def removeFirebaseData(pathVal) {
 	LogAction("removeFirebaseData(${pathVal})", "trace", false)
 	def result = true
 	try {
-		httpDelete(uri: "${getFirebaseAppUrl()}/${pathVal}") { resp ->
-			LogAction("resp: ${resp?.status}", "info", true)
+		httpDelete(uri: "${getFbMetricsUrl()}/${pathVal}") { resp ->
+			LogAction("cur FB resp: ${resp?.status}", "info", true)
+		}
+		httpDelete(uri: "${getFbLegacyAppUrl()}/${pathVal}") { resp ->
+			LogAction("old FB resp: ${resp?.status}", "info", true)
 		}
 	}
 	catch (ex) {
